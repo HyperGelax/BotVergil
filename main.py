@@ -6,13 +6,13 @@ import asyncio
 import random
 import nacl
 from discord import FFmpegPCMAudio
-from os import remove
+import os
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
-TOKEN = 'MTA5MTM1MTgwNjE5OTc0NjYxMQ.GDRpD_.rzerNtvoHbFoHKahcm3YKD2h8IB_GOiaQRKQCo'
+TOKEN = 'MTA5MTM1MTgwNjE5OTc0NjYxMQ.GWdFpE.TxdvYPEQT53yjUkGWonks7FBnZ5ErZDHUibGaI'
 queue = []
 voice_channel = None
 pause_status = False
@@ -79,6 +79,14 @@ class YTDLSource(discord.PCMVolumeTransformer):
         filename = data['title'] if stream else ytdl.prepare_filename(data)
         return filename
 
+    @classmethod
+    async def get_title(cls, url):
+        data = ytdl.extract_info(url, download=False)
+        if 'entries' in data:
+            data = data['entries'][0]
+        title = data['title']
+        return title
+
 
 @bot.command(name='add')
 async def add(ctx, url):
@@ -127,7 +135,7 @@ async def leave(ctx):
 
 @bot.command(name='com')
 async def com(ctx):
-    await ctx.reply('```Список команд: \n !com - вызов меню команд \n \n !play - начать воспроизведение/добавить в \
+    await ctx.reply('```Список команд: \n !com - вызов меню команд \n !play - начать воспроизведение/добавить в \
 очередь \n !stop - остановить воспроизведение \n !pause - поставить на паузу \
 \n !res - возобновить песню \n !skip - пропустить песню```')
 
@@ -179,11 +187,11 @@ async def queue_show(ctx):
         await ctx.send('```Очередь пуста```')
     for i in queue:
         count += 1
-        await ctx.send(f'```№{count} \n {queue[queue.index(i)]}```')
+        await ctx.send(f'```№{count} \n {queue[queue.index(i)][1]}```')
 
 
 @bot.command(name='play')
-async def play(ctx, url=None):
+async def play(ctx, *, url=None):
     global queue
     if not ctx.message.guild.voice_client:
         if not ctx.message.author.voice:
@@ -199,7 +207,8 @@ async def play(ctx, url=None):
                 pass
         await channel.connect()
     if url is not None:
-        queue.append(url)
+        title = await YTDLSource.get_title(url)
+        queue.append([url, title])
         await ctx.reply('Добавлено в очередь')
     if voice_channel is not None:
         server = ctx.message.guild
@@ -211,16 +220,15 @@ async def play(ctx, url=None):
                     global queue
 
                     if len(queue) > 0:
-                        filename = await YTDLSource.from_url(queue[0], loop=bot.loop)
+                        filename = await YTDLSource.from_url(queue[0][0], loop=bot.loop)
                         voice.play(FFmpegPCMAudio(executable="ffmpeg.exe", source=filename))
-                        print(queue)
-                        await ctx.send(f'Сейчас играет: {queue[0]}')
+                        await ctx.send(f'Сейчас играет: {queue[0][1]}')
 
                         while voice.is_playing() or pause_status:
                             await asyncio.sleep(1)
 
                         del queue[queue.index(queue[0])]
-                        remove(filename)
+                        os.remove(filename)
 
                         await playing_recursive()
 
